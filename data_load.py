@@ -77,7 +77,30 @@ def normalize_column_names(df):
     ]
     return df
 
-reader = pd.read_csv(CSV_PATH, chunksize=CHUNKSIZE, parse_dates=["Date"], low_memory=False)
+# Define data types for supported types
+dtype_mapping = {
+    "ID": "Int64",  
+    "Case Number": "string",
+    "Block": "string",
+    "IUCR": "string",
+    "Primary Type": "string",
+    "Description": "string",
+    "Location Description": "string",
+    "Beat": "string",
+    "District": "string",
+    "Ward": "string",
+    "Community Area": "string",
+    "FBI Code": "string",
+    "X Coordinate": "Int64",
+    "Y Coordinate": "Int64",
+    "Year": "Int64",
+    "Latitude": "float64",
+    "Longitude": "float64",
+    "Location": "string"
+}
+
+               
+reader = pd.read_csv(CSV_PATH, chunksize=CHUNKSIZE, dtype=dtype_mapping, parse_dates=["Date"], low_memory=False)
 
 # -------------------- FACT LOAD --------------------
 print("Loading fact table into SQL Server...")
