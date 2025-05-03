@@ -39,7 +39,7 @@ metadata = MetaData()
 
 # -------------------- DIMENSION TABLES --------------------
 dim_date = Table('dim_date', metadata,
-    Column('date_id', Integer, autoincrement=True, primary_key=True),  # format: YYYYMMDD
+    Column('date_id', Integer, primary_key=True),  # format: YYYYMMDD
     Column('full_date', Date),
     Column('year', Integer),
     Column('month', Integer),
@@ -49,7 +49,7 @@ dim_date = Table('dim_date', metadata,
 )
 
 dim_location = Table('dim_location', metadata,
-    Column('location_id', Integer, autoincrement=True, primary_key=True),
+    Column('location_id', Integer, primary_key=True),
     Column('block', String(100)),
     Column('ward', String(10)),
     Column('community_area', String(10)),
@@ -59,7 +59,7 @@ dim_location = Table('dim_location', metadata,
 )
 
 dim_crime_type = Table('dim_crime_type', metadata,
-    Column('crime_type_id', Integer, autoincrement=True, primary_key=True),
+    Column('crime_type_id', Integer, primary_key=True),
     Column('iucr', String(10)),
     Column('primary_type', String(50)),
     Column('description', String(100)),

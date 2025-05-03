@@ -31,32 +31,33 @@ def disable_identity_insert(engine, table_name):
         conn.execute(text(f"SET IDENTITY_INSERT {table_name} OFF"))
 
 # -------------------- BUILD DIMENSION --------------------
-def build_dim(df, cols, table_name, engine):
+def build_dim(df, cols, table_name, engine, start_id=1):
     dim_name = "_".join(table_name.split('_')[1:])
-    col_names = [col["name"] for col in inspect(engine).get_columns(table_name) if f'{dim_name}_id' != col["name"]]
+    col_names = [col["name"] for col in inspect(engine).get_columns(table_name)]
     dim = df[cols].drop_duplicates().reset_index(drop=True)
-    
-    dim = dim[cols]
-    dim.columns = col_names
-
+    end_id = len(dim) + start_id
+    dim.columns = col_names[1:]
+    dim[f'{dim_name}_id'] = np.arange(start_id, end_id)
+    enable_identity_insert(engine, table_name )
     dim.to_sql(table_name, engine, index=False, if_exists='append')
-
-    return dim
+    disable_identity_insert(engine, table_name)
+    return dim, end_id
 
 # -------------------- BUILD DATE DIM --------------------
-def build_date_dim(df):
+def build_date_dim(df, start_id=1):
     df['date_only'] = pd.to_datetime(df['Date']).dt.date
     dim = pd.DataFrame(df['date_only'].unique(), columns=['full_date'])
-    # dim['date_id'] = dim['full_date'].apply(lambda d: int(d.strftime('%Y%m%d')))
+    end_id = len(dim) + start_id
+    dim['date_id'] = np.arange(start_id, end_id)
     dim['year'] = pd.to_datetime(dim['full_date']).dt.year
     dim['month'] = pd.to_datetime(dim['full_date']).dt.month
     dim['day'] = pd.to_datetime(dim['full_date']).dt.day
     dim['day_of_week'] = pd.to_datetime(dim['full_date']).dt.day_name()
     dim['is_weekend'] = dim['day_of_week'].isin(['Saturday', 'Sunday']).astype(int)
-
+    enable_identity_insert(engine, 'dim_date')
     dim.to_sql("dim_date", engine, index=False, if_exists="append")
-
-    return dim
+    disable_identity_insert(engine, 'dim_date')
+    return dim, end_id
 
 # # -------------------- FIRST CHUNK (Build Dimensions) --------------------
 # reader = pd.read_csv(CSV_PATH, chunksize=CHUNKSIZE, parse_dates=["Date", "Updated On"], low_memory=False)
@@ -80,24 +81,18 @@ reader = pd.read_csv(CSV_PATH, chunksize=CHUNKSIZE, parse_dates=["Date"], low_me
 
 # -------------------- FACT LOAD --------------------
 print("Loading fact table into SQL Server...")
+start_date_id, start_location_id, start_crime_type_id = 1, 1, 1
 for chunk in tqdm(reader):
-    chunk_length = len(chunk)
-    print(f"chunk size: {len(chunk)}")
     print("Loading dimensions...")
-    dim_date = build_date_dim(chunk)
-    query = "SELECT * FROM dim_date"
-    dim_date = pd.read_sql(query, engine)
-    
-    dim_crime_type = build_dim(chunk, ['IUCR', 'Primary Type', 'Description', 'FBI Code'], 'dim_crime_type', engine)
-    query = "SELECT * FROM dim_crime_type"
-    dim_crime_type = pd.read_sql(query, engine)
-
-    dim_location = build_dim(chunk, ['Block', 'Ward', 'Community Area', 'Location Description', 'Latitude', 'Longitude'], 'dim_location', engine)
-    query = "SELECT * FROM dim_location"
-    dim_location = pd.read_sql(query, engine)
+    dim_date, start_date_id = build_date_dim(chunk, start_date_id)
+    dim_crime_type, start_crime_type_id = build_dim(chunk, ['IUCR', 'Primary Type', 'Description', 'FBI Code'], 'dim_crime_type', engine, start_crime_type_id)
+    dim_location, start_location_id = build_dim(chunk, ['Block', 'Ward', 'Community Area', 'Location Description', 'Latitude', 'Longitude'], 'dim_location', engine, start_location_id)
 
     print("Dimensions Loaded.")
 
+    print("Merging ...")
+    chunk_length = len(chunk)
+    print(f"chunk size: {len(chunk)}")
     cols = [
         'id', 'case_number', 'date_id', 'location_id',
         'crime_type_id', "arrest", "domestic", 'beat', 'district'
